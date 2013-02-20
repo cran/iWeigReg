@@ -1,0 +1,362 @@
+\documentclass[12pt,oneside]{article}
+\usepackage{epsfig,lscape}
+\usepackage{amssymb,amsfonts,amsmath}
+\usepackage{rotating}
+
+\usepackage[utf8]{inputenc}
+
+% page style
+\pagestyle{plain}
+% page format
+\setlength{\oddsidemargin}{.1in}
+\setlength{\evensidemargin}{0in}
+\setlength{\topmargin}{-.5in}   %%%
+\setlength{\textwidth}{6in}
+\setlength{\textheight}{9in}
+% paragraph format
+\setlength{\parindent}{3ex}
+\setlength{\parskip}{0ex}
+\renewcommand{\baselinestretch}{1.6}
+
+\def\me{\mathrm e}
+\def\mi{\mathrm i}
+\def\dif{\mathrm d}
+\def\diag{\mbox{diag}}
+
+%\def\E{\mathrm E}
+\def\var{\mathrm{var}}
+\def\cov{\mathrm{cov}}
+\def\pr{\mathrm{pr}}
+\def\N{\mbox{N}}
+
+\def\tr{\mathrm{tr}}
+\def\T{{ \mathrm{\scriptscriptstyle T} }}
+
+%\VignetteIndexEntry{iWeigReg vignette}
+
+\begin{document}
+
+\begin{center}
+{\bf\large A Vignette for iWeigReg - version 1.0}
+
+\vspace{.15in} Zhiqiang Tan\footnotemark[1]
+
+%\vspace{.05in}
+February 2013
+\end{center}
+
+\footnotetext[1]{Department of Statistics, Rutgers University. Address: 110 Frelinghuysen Road,
+Piscataway, NJ 08854. E-mail: ztan@stat.rutgers.edu.}
+
+\vspace{-.4in}\section{Introduction}\vspace{-.1in}
+
+The R package \texttt{iWeigReg} -- version 1.0 can be used for two main tasks:
+\begin{itemize}\setlength{\itemsep}{-.1in}
+\item to estimate the mean of an outcome in the presence of missing data,
+
+\item to estimate the average treatment effect in causal inference.
+\end{itemize}
+There are 4 functions provided for the first task:
+\begin{itemize}\setlength{\itemsep}{-.1in}
+\item \texttt{mn.lik}: the non-calibrated (or non-doubly robust) likelihood estimator in Tan (2006),
+
+\item \texttt{mn.clik}: the calibrated (or doubly robust) likelihood estimator in Tan (2010),
+
+\item \texttt{mn.reg}: the non-calibrated (or non-doubly robust) regression estimator,
+
+\item \texttt{mn.creg}: the calibrated (or doubly robust) regression estimator in Tan (2006).
+\end{itemize}
+In parallel, there are also 4 functions for the second task, \texttt{ate.lik}, \texttt{ate.clik}, \texttt{ate.reg}, and \texttt{ate.creg}. Currently, the treatment is assumed to be binary (i.e., untreated or treated). Extensions to multi-valued treatments will be incorporated in later versions.
+
+In general, the function recommended to use is the calibrated (or doubly robust) likelihood estimator, \texttt{mn.clik} or \texttt{ate.clik}, which is a two-step procedure with the first step corresponding to the non-calibrated (or non-doubly robust) likelihood estimator. The calibrated (or doubly robust) regression estimator, \texttt{mn.creg} or \texttt{ate.creg}, is a close relative to the calibrated likelihood estimator, but may sometimes yield an estimate lying outside the sample range, for example, outside the unit interval $(0,1)$ for estimating the mean of a binary outcome.
+
+The package also provides two functions, \texttt{mn.HT} and \texttt{ate.HT}, for the Horvitz-Thompson estimator, i.e., the unaugmented inverse probability weighted estimator. These functions can be used for balance checking.
+
+\section{An example}
+
+We illustrate the use of the package for causal inference on a simulated dataset according to Kang \& Schafer (2007). The use of the package is similar in the missing-data setup. The dataset, \texttt{KS.data}, is included as part of the package.
+
+<<read.data>>=
+library(iWeigReg)
+
+data(KS.data)
+attach(KS.data)
+@
+
+The following shows the first 3 rows of the dataset:
+
+<<>>=
+KS.data[1:3,]
+@
+
+For the setup of causal inference, suppose that \texttt{y} gives the observed outcome, \texttt{tr} the treatment indicator, \texttt{(z1, z2, z3, z4)} the covariates leading to correct models, and \texttt{(x1, x2, x3, x4)} the covariates leading to misspecified models. The true value of the average treatment effect is 0.
+
+<<>>=
+n=1000
+z=cbind(z1,z2,z3,z4)
+x=cbind(x1,x2,x3,x4)
+@
+
+\subsection{Fitting models}
+
+Suppose that a misspecified propensity score model is fitted. (A logistic regression model is {\it assumed} to be used, although other types of regression models may be allowed in later versions of the package.) The model matrix is recorded as \texttt{X}, and the fitted propensity scores are recorded in \texttt{ppi.hat}.
+
+<<>>=
+ppi.glm <- glm(tr~x, family=binomial(link=logit))
+
+X <- model.matrix(ppi.glm)
+ppi.hat <- ppi.glm$fitted
+@
+
+Suppose that a correct outcome regression model is fitted, separately in the treated group (\texttt{tr==1}) and the untreated group (\texttt{tr==0}). The fitted outcome regression functions are recorded as \texttt{eta1.hat} and \texttt{eta0.hat} respectively.
+
+<<keep.source=TRUE>>=
+y.fam <- gaussian(link=identity)
+
+eta1.glm <- glm(y ~ z, subset=tr==1, 
+               family=y.fam, control=glm.control(maxit=1000))
+eta1.hat <- predict.glm(eta1.glm, 
+               newdata=data.frame(z=z), type="response")
+
+eta0.glm <- glm(y ~ z, subset=tr==0, 
+               family=y.fam, control=glm.control(maxit=1000))
+eta0.hat <- predict.glm(eta0.glm, 
+               newdata=data.frame(z=z), type="response")
+@
+
+\subsection{Checking balance}
+
+If the propensity score model is correctly specified, then the treated group is expected to be similar to (or matched with) the untreated group in terms of the covariates, after inverse probability weighting. In fact, the weighted distributions of the covariates within each treatment group are expected to be similar to the unweighted distributions in the overall sample. This balancing property provides an informative way to check propensity score models as suggested in Tan (2006).
+
+The function \texttt{ate.HT} can be used to compute the differences between the weighted treatement-specific means and the unweighted overall means of the covariates, i.e.,
+\begin{align*}
+&\frac{1}{n} \sum_{i=1}^n \frac{R_i Z_i}{\hat \pi_i} - \frac{1}{n} \sum_{i=1}^n Z_i, \\
+&\frac{1}{n} \sum_{i=1}^n \frac{(1-R_i) Z_i}{1-\hat \pi_i} - \frac{1}{n} \sum_{i=1}^n Z_i, 
+\end{align*}
+where $R_i$ are treatment indicators, $\hat \pi_i$ the fitted propensity scores, and $Z_i$ the vector of covariates for which balance is to be checked. Typically, the covariates in $Z_i$ are those entered in the outcome regression models. 
+
+<<>>=
+out.HT <- ate.HT(z, tr, ppi.hat, X, bal=TRUE)
+out.HT$mu
+@
+
+The statistical significance of the differences can be assessed by the $z$-statistics as follows. There are a relatively large number of $z$-values exceeding 2 in absolute value, which (correctly) indicates that the propensity score model used is misspecified.
+
+<<>>=
+out.HT$mu/ sqrt(out.HT$v)
+@
+
+\begin{figure}
+\caption{Unweighted and weighted histograms (black: treated group, red: untreated group), with a misspecified propensity score model and a correct outcome regression model.} \vspace{-.1in}
+\begin{center}
+<<fig=TRUE, echo=FALSE>>=
+gp1 <- tr==1
+gp0 <- tr==0
+
+out.clik <- ate.clik(y, tr, ppi.hat, 
+               g0=cbind(1,eta0.hat),g1=cbind(1,eta1.hat))
+
+par(mfrow=c(2,3))
+look <- z1
+
+histw(look[gp1], rep(1,sum(gp1)), xaxis=seq(-3.5,3.5,.25),
+    xmin=-3.5, xmax=3.5, ymax=.8)
+histw(look[gp0], rep(1,sum(gp0)), xaxis=seq(-3.5,3.5,.25), 
+    xmin=-3.5, xmax=3.5, ymax=.8, bar=0, add=TRUE, col="red")
+title(main="unweighted", ylab="z1")
+
+histw(look[gp1], 1/ppi.hat[gp1], xaxis=seq(-3.5,3.5,.25), 
+    xmin=-3.5, xmax=3.5, ymax=.8)
+histw(look[gp0], 1/(1-ppi.hat[gp0]), xaxis=seq(-3.5,3.5,.25), 
+    xmin=-3.5, xmax=3.5, ymax=.8, bar=0, add=TRUE, col="red")
+title(main="HT weighted", ylab="z1")
+
+histw(look[gp1], 1/out.clik$w[gp1,1], xaxis=seq(-3.5,3.5,.25), 
+    xmin=-3.5, xmax=3.5, ymax=.8)
+histw(look[gp0], 1/out.clik$w[gp0,2], xaxis=seq(-3.5,3.5,.25), 
+    xmin=-3.5, xmax=3.5, ymax=.8, bar=0, add=TRUE, col="red")
+title(main="clik weighted", ylab="z1")
+
+look <- z2
+
+histw(look[gp1], rep(1,sum(gp1)), xaxis=seq(-3.5,3.5,.25),
+    xmin=-3.5, xmax=3.5, ymax=.8)
+histw(look[gp0], rep(1,sum(gp0)), xaxis=seq(-3.5,3.5,.25), 
+    xmin=-3.5, xmax=3.5, ymax=.8, bar=0, add=TRUE, col="red")
+title(main="unweighted", ylab="z2")
+
+histw(look[gp1], 1/ppi.hat[gp1], xaxis=seq(-3.5,3.5,.25), 
+    xmin=-3.5, xmax=3.5, ymax=.8)
+histw(look[gp0], 1/(1-ppi.hat[gp0]), xaxis=seq(-3.5,3.5,.25), 
+    xmin=-3.5, xmax=3.5, ymax=.8, bar=0, add=TRUE, col="red")
+title(main="HT weighted", ylab="z2")
+
+histw(look[gp1], 1/out.clik$w[gp1,1], xaxis=seq(-3.5,3.5,.25), 
+    xmin=-3.5, xmax=3.5, ymax=.8)
+histw(look[gp0], 1/out.clik$w[gp0,2], xaxis=seq(-3.5,3.5,.25), 
+    xmin=-3.5, xmax=3.5, ymax=.8, bar=0, add=TRUE, col="red")
+title(main="clik weighted", ylab="z2")
+@
+\end{center}
+\end{figure}
+
+For graphical comparisons, the function \texttt{histw} can be used to generate weighted hitograms (and also unweighted histograms) of the covariates for the two treatment groups, as illustrated in Figure 1. To save space, the following code corresponds only to the first two plots in the first row of Figure 1. There are appreciable differences in the HT-weighted histograms between the two treatment groups (see the right tail of \texttt{z1} and the values of \texttt{z2} near 1), although these differences are not as substantial as those in the unweighted histograms.
+
+<<fig=FALSE, echo=TRUE, keep.source=TRUE>>=
+gp1 <- tr==1
+gp0 <- tr==0
+
+par(mfrow=c(2,3))
+look <- z1
+
+histw(look[gp1], rep(1,sum(gp1)), xaxis=seq(-3.5,3.5,.25),
+    xmin=-3.5, xmax=3.5, ymax=.8)
+histw(look[gp0], rep(1,sum(gp0)), xaxis=seq(-3.5,3.5,.25), 
+    xmin=-3.5, xmax=3.5, ymax=.8, bar=0, add=TRUE, col="red")
+title(main="unweighted", ylab="z1")
+
+histw(look[gp1], 1/ppi.hat[gp1], xaxis=seq(-3.5,3.5,.25), 
+    xmin=-3.5, xmax=3.5, ymax=.8)
+histw(look[gp0], 1/(1-ppi.hat[gp0]), xaxis=seq(-3.5,3.5,.25), 
+    xmin=-3.5, xmax=3.5, ymax=.8, bar=0, add=TRUE, col="red")
+title(main="HT weighted", ylab="z1")
+@
+
+\subsection{Applying the calibrated likelihood method}
+
+If balance checking suggests possible model misspecification, then it is usually advisable to revise the propensity score model by, for example, introducing additional terms. This process of model building and checking needs to be carefully done in real data analysis. Nevertheless, we proceed to apply the calibrated likelihood estimator based on the given propensity score model and outcome regression model.
+
+<<keep.source=TRUE>>=
+out.clik <- ate.clik(y, tr, ppi.hat, 
+               g0=cbind(1,eta0.hat),g1=cbind(1,eta1.hat))
+@
+
+The weighted histograms based on \texttt{out.clik} are also shown in Figure 1. To save space, the following code corresponds to the third plot in the first row of Figure 1. Remarkably, the differences between the weighted treatment-specific histograms based on \texttt{out.clik} appear to be considerably reduced, compared with the HT-weighted histograms.
+Therefore, the calibrated likelihood method can be seen to (partially) correct for misspecification of the propensity score model. This effect can persist even if misspecified outcome regression models are used (see Section 2.4).
+
+<<fig=FALSE, echo=TRUE, keep.source=TRUE>>=
+look <- z1
+
+histw(look[gp1], 1/out.clik$w[gp1,1], xaxis=seq(-3.5,3.5,.25), 
+    xmin=-3.5, xmax=3.5, ymax=.8)
+histw(look[gp0], 1/out.clik$w[gp0,2], xaxis=seq(-3.5,3.5,.25), 
+    xmin=-3.5, xmax=3.5, ymax=.8, bar=0, add=TRUE, col="red")
+title(main="clik weighted", ylab="z1")
+@
+
+The following code gives the estimated treatment means and their standard errors. The true values of the two treatment means are both 210.
+
+<<>>==
+out.clik$mu
+sqrt(out.clik$v)
+@
+
+The next code gives the estimated average treatment effect and its standard error. The true value of the average treatment effect is 0.
+
+<<>>==
+out.clik$diff
+sqrt(out.clik$v.diff)
+@
+
+The vectors of calibration variables, \texttt{g0} and \texttt{g1}, can be specified in other ways as shown in the following example. Double robustness is achieved provided that the fitted outcome regression function for treatment 0 and 1 is contained in the linear span generated by the columns of \texttt{g0} and \texttt{g1} respectively. 
+
+<<keep.source=TRUE>>==
+out.clik2 <- ate.clik(y, tr, ppi.hat, 
+               g0=cbind(1,z),g1=cbind(1,z))
+@
+
+By the calibrated likelihood method, the weighted treatment-specific means of each calibration variable are equal to the overall unweighted mean.
+
+<<>>==
+apply(z, 2, mean)
+apply(z[gp1,]/out.clik2$w[gp1,1], 2, sum)/n
+apply(z[gp0,]/out.clik2$w[gp0,2], 2, sum)/n
+@
+
+\subsection{Additional illustration}
+
+Now suppose that a misspecified outcome regression model is fitted.
+<<keep.source=TRUE>>==
+eta1.glm <- glm(y ~ x, subset=tr==1, 
+               family=y.fam, control=glm.control(maxit=1000))
+eta1.hat <- predict.glm(eta1.glm, 
+               newdata=data.frame(x=x), type="response")
+
+eta0.glm <- glm(y ~ x, subset=tr==0, 
+               family=y.fam, control=glm.control(maxit=1000))
+eta0.hat <- predict.glm(eta0.glm, 
+               newdata=data.frame(x=x), type="response")
+@
+
+The calibrated likelihood method is applied next.
+
+<<>>==
+out.clik <- ate.clik(y, tr, ppi.hat, 
+               g0=cbind(1,eta0.hat),g1=cbind(1,eta1.hat))
+@
+
+Figure 2 shows the weighted treatment-specific histograms of \texttt{(z1,z2)} based on the new results, \texttt{out.clik}, as the third plot in each row. The first two plots included in each row are the same as in Figure 1. There appears to be much smaller differences in the weighted treatment-specific histograms based on the calibrated likelihood method than those in the HT-weighted histograms, even though both the propensity score model and the outcome regresion model are misspecified.
+
+\begin{figure}
+\caption{Unweighted and weighted histograms (black: treated group, red: untreated group), with a misspecified propensity score model and a misspecified outcome regression model.} \vspace{-.1in}
+\begin{center}
+<<fig=TRUE, echo=FALSE>>=
+par(mfrow=c(2,3))
+look <- z1
+
+histw(look[gp1], rep(1,sum(gp1)), xaxis=seq(-3.5,3.5,.25),
+    xmin=-3.5, xmax=3.5, ymax=.8)
+histw(look[gp0], rep(1,sum(gp0)), xaxis=seq(-3.5,3.5,.25), 
+    xmin=-3.5, xmax=3.5, ymax=.8, bar=0, add=TRUE, col="red")
+title(main="unweighted", ylab="z1")
+
+histw(look[gp1], 1/ppi.hat[gp1], xaxis=seq(-3.5,3.5,.25), 
+    xmin=-3.5, xmax=3.5, ymax=.8)
+histw(look[gp0], 1/(1-ppi.hat[gp0]), xaxis=seq(-3.5,3.5,.25), 
+    xmin=-3.5, xmax=3.5, ymax=.8, bar=0, add=TRUE, col="red")
+title(main="HT weighted", ylab="z1")
+
+histw(look[gp1], 1/out.clik$w[gp1,1], xaxis=seq(-3.5,3.5,.25), 
+    xmin=-3.5, xmax=3.5, ymax=.8)
+histw(look[gp0], 1/out.clik$w[gp0,2], xaxis=seq(-3.5,3.5,.25), 
+    xmin=-3.5, xmax=3.5, ymax=.8, bar=0, add=TRUE, col="red")
+title(main="clik weighted", ylab="z1")
+
+look <- z2
+
+histw(look[gp1], rep(1,sum(gp1)), xaxis=seq(-3.5,3.5,.25),
+    xmin=-3.5, xmax=3.5, ymax=.8)
+histw(look[gp0], rep(1,sum(gp0)), xaxis=seq(-3.5,3.5,.25), 
+    xmin=-3.5, xmax=3.5, ymax=.8, bar=0, add=TRUE, col="red")
+title(main="unweighted", ylab="z2")
+
+histw(look[gp1], 1/ppi.hat[gp1], xaxis=seq(-3.5,3.5,.25), 
+    xmin=-3.5, xmax=3.5, ymax=.8)
+histw(look[gp0], 1/(1-ppi.hat[gp0]), xaxis=seq(-3.5,3.5,.25), 
+    xmin=-3.5, xmax=3.5, ymax=.8, bar=0, add=TRUE, col="red")
+title(main="HT weighted", ylab="z2")
+
+histw(look[gp1], 1/out.clik$w[gp1,1], xaxis=seq(-3.5,3.5,.25), 
+    xmin=-3.5, xmax=3.5, ymax=.8)
+histw(look[gp0], 1/out.clik$w[gp0,2], xaxis=seq(-3.5,3.5,.25), 
+    xmin=-3.5, xmax=3.5, ymax=.8, bar=0, add=TRUE, col="red")
+title(main="clik weighted", ylab="z2")
+@
+\end{center}
+\end{figure}
+
+\newpage
+\centerline{\bf REFERENCES}
+\begin{description}
+
+\item Kang, J.D.Y. and Schafer, J.L. (2007) ``Demystifying double robustness: A comparison of alternative strategies for estimating a population mean from incomplete data," \emph{Statistical Science}, 22, 523-539.
+
+\item Tan, Z. (2006) ``A distributional approach for causal inference using
+propensity scores," {\em Journal of the American Statistical Association}, 101, 1619--1637.
+
+\vspace{-.1in}\item Tan, Z. (2010) ``Bounded, efficient, and doubly robust estimation with inverse weighting," {\em Biometrika}, 97, 661--682.
+
+\end{description}
+
+
+\end{document}

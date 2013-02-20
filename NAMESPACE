@@ -1,0 +1,7 @@
+import(MASS)
+import(trust)
+export(histw, myinv, loglik, loglik.g,
+       mn.lik, mn.clik,
+       mn.HT, mn.reg, mn.creg,
+       ate.lik, ate.clik,
+       ate.HT, ate.reg, ate.creg)

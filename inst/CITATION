@@ -1,0 +1,16 @@
+citHeader("To cite package 'iWeigReg' in publications use:")
+
+year <- sub(".*(2[[:digit:]]{3})-.*", "\\1", meta$Date, perl = TRUE)
+vers <- paste("R package version", meta$Version)
+
+citEntry(entry="Manual",
+         title = "iWeigReg: Improved methods for causal inference and missing data problems",
+         author = personList(as.person("Zhiqiang Tan"),
+         as.person("Heng Shu")),
+         year = year,
+         note = vers,
+         textVersion =
+         paste("Tan, Z. and Shu, H. (",
+               year,
+               "). iWeigReg: Improved methods for causal inference and missing data problems. ",
+               vers, ".", sep=""))
