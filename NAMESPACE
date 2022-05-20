@@ -1,5 +1,6 @@
 import(MASS)
 import(trust)
+importFrom("graphics", "axis", "lines", "plot.new", "plot.window", "rect")
 export(histw, myinv, loglik, loglik.g,
        mn.lik, mn.clik,
        mn.HT, mn.reg, mn.creg,

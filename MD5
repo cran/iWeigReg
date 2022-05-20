@@ -1,10 +1,13 @@
-74f20a9a37dee427ece11cd8cd7cff76 *DESCRIPTION
-aaf45a8536e3563d3cc7564b0c4e7744 *NAMESPACE
+44cfa8811fc3663f1c682ee7fad54a72 *DESCRIPTION
+0e1607692c33ae9b59d37abb58835d7c *NAMESPACE
+20b5b0c908a3c172ca29f137e12ce886 *NEWS.md
 e95116332e9bf74313932472fb61b27a *R/my-code.R
+8a1f139466557d9c97b18272f27f163e *build/vignette.rds
 f31ed900470c252fd21a6d567e0e9bf7 *data/KS.data.rda
 b680556c06b490ac0bf6f5a601dbfaa1 *inst/CITATION
+763a0dc1cac61e86d96925fcbfe4bfa1 *inst/doc/vig.R
 9e5c98e200511b3b68ae2654b437c08b *inst/doc/vig.Rnw
-8326d7466041047c46d99a389632fe9b *inst/doc/vig.pdf
+e9b73cbb303f494967ebfa0aa9fc2499 *inst/doc/vig.pdf
 45b3b86894aa348f217971908c9d2e76 *man/KS.data.Rd
 21c238afbb456ac7b4fccc2bee0d4b2d *man/ate.HT.Rd
 cc172449261cbae273e63537cc7e8235 *man/ate.clik.Rd
